@@ -6,172 +6,60 @@ import string
 import re
 import requests
 from bs4 import BeautifulSoup
-from concurrent.futures import ThreadPoolExecutor
 
-# ==========================================
-# 🎨 টার্মিনাল কালার কোড
-# ==========================================
-R = '\033[1;31m' # Red
+# --- কালার সেটিংস ---
 G = '\033[1;32m' # Green
-Y = '\033[1;33m' # Yellow
-B = '\033[1;34m' # Blue
-C = '\033[1;36m' # Cyan
+R = '\033[1;31m' # Red
 W = '\033[1;37m' # White
+Y = '\033[1;33m' # Yellow
+C = '\033[1;36m' # Cyan
 S = '\033[0m'    # Reset
 
-# ==========================================
-# 🛠 ইউটিলিটি এবং ডাইনামিক ফাংশন
-# ==========================================
-def clear():
-    os.system('clear' if os.name == 'posix' else 'cls')
+# --- গ্লোবাল সেটিংস ---
+proxies = []
 
-def line():
-    print(f'{W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{S}')
-
-def loading(text, delay=2):
-    for char in ["/", "-", "\\", "|"]:
-        sys.stdout.write(f'\r{G}[*] {W}{text} {char}')
-        sys.stdout.flush()
-        time.sleep(0.1)
-    print(f'\r{G}[√] {W}{text} সম্পন্ন!      {S}')
-
-def get_user_agent():
-    """ডাইনামিক ইউজার-এজেন্ট জেনারেটর (লেটেস্ট অ্যান্ড্রয়েড ভার্সন অনুযায়ী)"""
-    versions = ["15", "14", "13"]
-    models = ["SM-S918B", "Pixel 8 Pro", "OnePlus 12", "Xiaomi 14"]
-    fb_vers = ["410.0.0.30.110", "430.0.0.25.101", "440.0.0.32.118"]
+# --- ১. ডাইনামিক ইউজার এজেন্ট ---
+def get_ua():
+    versions = ["13", "14", "15"]
+    models = ["SM-S918B", "Pixel 8 Pro", "OnePlus 12", "Xiaomi 14 Ultra"]
+    fb_vers = ["410.0.0.30.110", "440.0.0.32.118"]
     ua = f"Mozilla/5.0 (Linux; Android {random.choice(versions)}; {random.choice(models)}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.144 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/{random.choice(fb_vers)};]"
     return ua
 
-# ==========================================
-# 🌐 প্রক্সি এবং টেম্প মেইল সিস্টেম
-# ==========================================
+# --- ২. প্রক্সি স্ক্র্যাপার ---
 def scrape_proxies():
-    print(f'\n{Y}[~] সার্ভার থেকে ফ্রি প্রক্সি খোঁজা হচ্ছে...{S}')
+    global proxies
     try:
         res = requests.get('https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=5000&country=all&ssl=all&anonymity=elite')
         proxies = res.text.strip().split('\r\n')
-        if proxies and proxies[0]:
-            print(f'{G}[√] {len(proxies)} টি এলিট প্রক্সি পাওয়া গেছে!{S}')
-            return proxies
+        return proxies
     except:
-        pass
-    print(f'{R}[X] প্রক্সি সংগ্রহ ব্যর্থ হয়েছে!{S}')
-    return []
+        return []
 
-def get_temp_mail():
+# --- ৩. টেম্প মেইল ও ওটিপি সিস্টেম ---
+def get_mail():
     try:
-        res = requests.get("https://www.1secmail.com/api/v1/?action=genRandomMailbox&count=1").json()
-        return res[0]
-    except:
-        return None
+        return requests.get("https://www.1secmail.com/api/v1/?action=genRandomMailbox&count=1").json()[0]
+    except: return None
 
 def get_otp(email):
     user, domain = email.split('@')
     url = f"https://www.1secmail.com/api/v1/?action=getMessages&login={user}&domain={domain}"
-    for _ in range(6): # ৩০ সেকেন্ড অপেক্ষা করবে
+    for _ in range(10):
         try:
             msgs = requests.get(url).json()
             if msgs:
                 msg_id = msgs[0]['id']
                 content = requests.get(f"{url}&id={msg_id}").json()
                 otp = re.search(r'\b\d{5}\b', content['body'])
-                if otp:
-                    return otp.group()
-        except:
-            pass
+                if otp: return otp.group()
+        except: pass
         time.sleep(5)
     return None
 
-# ==========================================
-# 💾 ডেটা ম্যানেজমেন্ট
-# ==========================================
-def save_account(uid, password, email):
-    folder = '/sdcard/FB-MASTER'
-    if not os.path.exists(folder):
-        try: os.makedirs(folder)
-        except: folder = '.' 
-    
-    with open(f'{folder}/Successful_IDs.txt', 'a') as f:
-        f.write(f'{uid} | {password} | {email}\n')
-
-# ==========================================
-# 🚀 মূল অটোমেশন লজিক (API Method)
-# ==========================================
-def run_automation():
-    clear()
-    banner()
-    
-    # অটোমেশনের জন্য ডিফল্ট প্রোফাইল ডেটা
-    first_name = "Itachi"
-    last_name = "Uchiha"
-    password = "".join(random.choice(string.ascii_letters + string.digits) for _ in range(12))
-    
-    print(f'{C}--- [ Account Data ] ---{S}')
-    print(f'{W}Name: {G}{first_name} {last_name}{S}')
-    print(f'{W}Pass: {G}{password}{S}')
-    line()
-
-    proxy_list = scrape_proxies()
-    proxy = random.choice(proxy_list) if proxy_list else None
-    email = get_temp_mail()
-
-    if not email:
-        print(f'{R}[X] টেম্প মেইল সার্ভার ডাউন!{S}')
-        return
-
-    print(f'{Y}[*] Email: {email}{S}')
-    if proxy:
-        print(f'{Y}[*] Proxy: {proxy}{S}')
-    line()
-
-    session = requests.Session()
-    session.headers.update({'User-Agent': get_user_agent()})
-    if proxy:
-        session.proxies = {'http': f'http://{proxy}', 'https': f'http://{proxy}'}
-
-    try:
-        loading("ফেসবুক সার্ভারের সাথে সংযোগ স্থাপন")
-        # পেজ লোড করে হিডেন টোকেন নেওয়া
-        resp = session.get("https://m.facebook.com/reg/")
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        
-        try:
-            lsd = soup.find('input', {'name': 'lsd'})['value']
-            jazoest = soup.find('input', {'name': 'jazoest'})['value']
-            print(f'{G}[+] সিকিউরিটি টোকেন বাইপাস সফল!{S}')
-        except:
-            print(f'{R}[-] সিকিউরিটি টোকেন পাওয়া যায়নি (IP Blocked?){S}')
-            return
-
-        loading("অ্যাকাউন্ট সাবমিশন প্রসেসিং")
-        # (বি.দ্র: এখানে রিয়েল সাবমিশন ডেটা পোস্ট করার লজিক থাকে)
-        
-        print(f'\n{C}[~] ইনবক্সে ওটিপি (OTP) এর জন্য অপেক্ষা করা হচ্ছে...{S}')
-        otp = get_otp(email)
-        
-        if otp:
-            print(f'{G}[√] OTP পাওয়া গেছে: {otp}{S}')
-            print(f'{G}[SUCCESS] অ্যাকাউন্ট সফলভাবে তৈরি এবং ভেরিফাই হয়েছে!{S}')
-            
-            # সেভ করার লজিক
-            dummy_uid = "1000" + "".join(random.choice(string.digits) for _ in range(11))
-            save_account(dummy_uid, password, email)
-            print(f'{Y}[+] ফাইল সেভ হয়েছে: /sdcard/FB-MASTER/Successful_IDs.txt{S}')
-        else:
-            print(f'{R}[X] সার্ভার থেকে কোনো OTP আসেনি!{S}')
-
-    except requests.exceptions.ProxyError:
-        print(f'{R}[X] প্রক্সি কানেকশন এরর! অন্য প্রক্সি চেষ্টা করুন বা এয়ারপ্লেন মোড অন/অফ করুন।{S}')
-    except Exception as e:
-        print(f'{R}[X] একটি ত্রুটি ঘটেছে: {e}{S}')
-        
-    input(f'\n{C}মেইন মেনুতে ফিরে যেতে এন্টার চাপুন...{S}')
-
-# ==========================================
-# 🖥 ইউজার ইন্টারফেস ও ব্যানার
-# ==========================================
+# --- ৪. ব্যানার ডিজাইন ---
 def banner():
+    os.system('clear')
     print(f"""{C}
     ███████╗██████╗      █████╗ ██╗   ██╗████████╗ ██████╗ 
     ██╔════╝██╔══██╗    ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗
@@ -179,48 +67,108 @@ def banner():
     ██╔══╝  ██╔══██╗    ██╔══██║██║   ██║   ██║   ██║   ██║
     ██║     ██████╔╝    ██║  ██║╚██████╔╝   ██║   ╚██████╔╝
     ╚═╝     ╚═════╝     ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ 
-    {W}       [ AUTO CREATOR - ULTIMATE EDITION ]
-    {G}       [ Auto Proxy | Temp Mail | OTP Bypass ]
+    {W}         [ VERSION: 16.0 - ULTIMATE MASTER ]
+    {G}         [ AUTO PROXY | TEMP MAIL | OTP ]
     """)
-    line()
+    print(f'{C}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{S}')
 
-def main():
-    while True:
-        clear()
-        banner()
-        print(f'{G}[01]{W} Start Auto Creation (Proxy + Mail)')
-        print(f'{G}[02]{W} Check Saved IDs')
-        print(f'{G}[03]{W} Install Required Packages')
-        print(f'{R}[00]{W} Exit')
-        line()
+# --- ৫. মেইন অটোমেশন লজিক ---
+def run_creation():
+    banner()
+    global proxies
+    if not proxies: scrape_proxies()
+    
+    # র‍্যান্ডম ডেটা তৈরি
+    first_name = "Itachi"
+    last_name = "Uchiha"
+    password = "".join(random.choice(string.ascii_letters + string.digits) for _ in range(12))
+    email = get_mail()
+    
+    if not email:
+        print(f'{R}[!] মেল সার্ভার পাওয়া যাচ্ছে না।{S}')
+        return
+
+    print(f'{G}[*] Target Email: {W}{email}')
+    print(f'{G}[*] Password: {W}{password}')
+    
+    session = requests.Session()
+    session.headers.update({'User-Agent': get_ua()})
+    
+    # প্রক্সি সেটআপ
+    if proxies:
+        p = random.choice(proxies)
+        session.proxies = {'http': f'http://{p}', 'https': f'http://{p}'}
+        print(f'{Y}[*] Using Proxy: {p}{S}')
+
+    try:
+        print(f'{C}[~] ফেসবুক রেজিস্ট্রেশন পেজ কানেক্ট করা হচ্ছে...{S}')
+        reg_page = session.get("https://m.facebook.com/reg/").text
+        soup = BeautifulSoup(reg_page, 'html.parser')
         
-        opt = input(f'{C}Select an Option: {W}')
+        # সব হিডেন টোকেন অটো-কালেক্ট করা
+        form_data = {}
+        for input_tag in soup.find_all('input', type='hidden'):
+            form_data[input_tag.get('name')] = input_tag.get('value')
+        
+        # ফরম ডেটা পূরণ করা
+        form_data.update({
+            'firstname': first_name,
+            'lastname': last_name,
+            'reg_email__': email,
+            'reg_passwd__': password,
+            'birthday_day': str(random.randint(1, 28)),
+            'birthday_month': str(random.randint(1, 12)),
+            'birthday_year': str(random.randint(1995, 2005)),
+            'sex': '2'
+        })
+
+        # ডেটা পোস্ট করা
+        print(f'{Y}[~] সাবমিশন রিকোয়েস্ট পাঠানো হচ্ছে...{S}')
+        post_url = "https://m.facebook.com/reg/submit/"
+        response = session.post(post_url, data=form_data)
+
+        if "checkpoint" in response.url:
+            print(f'{R}[X] ফেসবুক চেকপয়েন্ট (Checkpoint) ধরে ফেলেছে।{S}')
+        else:
+            print(f'{C}[~] ওটিপি (OTP) এর জন্য অপেক্ষা করা হচ্ছে...{S}')
+            otp = get_otp(email)
+            if otp:
+                print(f'{G}[√] সফল! ওটিপি পাওয়া গেছে: {W}{otp}')
+                # এখানে ওটিপি কনফার্ম করার রিকোয়েস্ট পাঠানো যায়
+                with open('Success_IDs.txt', 'a') as f:
+                    f.write(f'{email} | {password} | {otp}\n')
+                print(f'{G}[+] আইডি সেভ করা হয়েছে Success_IDs.txt এ।{S}')
+            else:
+                print(f'{R}[X] ওটিপি পাওয়া যায়নি। আবার চেষ্টা করুন।{S}')
+
+    except Exception as e:
+        print(f'{R}[!] ত্রুটি: {e}{S}')
+
+    input(f'\n{C}ফিরে যেতে এন্টার চাপুন...{S}')
+
+# --- ৬. মেইন মেনু ---
+def main_menu():
+    while True:
+        banner()
+        print(f'{G}[01]{W} Start Auto Account Creation')
+        print(f'{G}[02]{W} Check Success Results')
+        print(f'{G}[03]{W} Update Proxy List')
+        print(f'{R}[00]{W} Exit')
+        print(f'{C}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{S}')
+        
+        opt = input(f'{G}Select Option: {W}')
         
         if opt in ['1', '01']:
-            run_automation()
+            run_creation()
         elif opt in ['2', '02']:
-            clear()
-            banner()
-            print(f'{Y}[*] আপনার সেভ করা অ্যাকাউন্টগুলো:{S}')
-            os.system('cat /sdcard/FB-MASTER/Successful_IDs.txt 2>/dev/null || cat Successful_IDs.txt 2>/dev/null || echo "\n  [!] কোনো আইডি পাওয়া যায়নি।"')
-            input(f'\n{C}ফিরে যেতে এন্টার চাপুন...{S}')
+            os.system('cat Success_IDs.txt 2>/dev/null || echo "No Success IDs yet."')
+            input('\nPress Enter...')
         elif opt in ['3', '03']:
-            clear()
-            print(f'{G}[*] প্যাকেজ ইন্সটল করা হচ্ছে...{S}')
-            os.system('termux-setup-storage')
-            os.system('pip install requests bs4 futures')
-            print(f'{G}[√] সেটআপ সম্পন্ন!{S}')
+            scrape_proxies()
+            print(f'{G}[√] প্রক্সি লিস্ট আপডেট হয়েছে।{S}')
             time.sleep(2)
         elif opt in ['0', '00']:
-            print(f'\n{R}[!] টুলটি বন্ধ করা হচ্ছে...{S}')
             sys.exit()
-        else:
-            print(f'\n{R}[X] ভুল অপশন!{S}')
-            time.sleep(1)
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print(f'\n\n{R}[!] ব্যবহারকারী দ্বারা বন্ধ করা হয়েছে।{S}')
-        sys.exit()
+    main_menu()
